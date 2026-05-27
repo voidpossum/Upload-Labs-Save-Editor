@@ -1,0 +1,991 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload Labs // Save Editor</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Share+Tech+Mono&family=Oswald:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg:          #0b0908;
+            --surface:     #13141a;
+            --surface-2:   #1a1b24;
+            --surface-3:   #20222e;
+            --orange:      #ff9200;
+            --orange-hot:  #ffab40;
+            --orange-dim:  rgba(255, 146, 0, 0.12);
+            --orange-glow: rgba(255, 146, 0, 0.28);
+            --cyan:        #00c8aa;
+            --cyan-dim:    rgba(0, 200, 170, 0.1);
+            --cyan-glow:   rgba(0, 200, 170, 0.25);
+            --purple:      #9b6dff;
+            --purple-dim:  rgba(155, 109, 255, 0.2);
+            --red-dim:     #5a1a0a;
+            --text:        #b8c4d8;
+            --text-bright: #d8e4f8;
+            --text-dim:    #404858;
+            --text-muted:  #6a788a;
+            --border:      #22262e;
+            --green-ok:    #4a9a3a;
+            --scan-color:  rgba(0, 0, 0, 0.14);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Share Tech Mono', monospace;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            padding: 32px 20px 60px;
+            position: relative;
+            overflow-x: hidden;
+        }
+
+        /* ── NOISE ── */
+        body::before {
+            content: '';
+            position: fixed; inset: 0;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.05'/%3E%3C/svg%3E");
+            opacity: 0.35; pointer-events: none; z-index: 0;
+        }
+
+        /* ── SCANLINES ── */
+        body::after {
+            content: '';
+            position: fixed; inset: 0;
+            background: repeating-linear-gradient(
+                0deg, var(--scan-color) 0px, var(--scan-color) 1px,
+                transparent 1px, transparent 3px
+            );
+            pointer-events: none; z-index: 1;
+        }
+
+        .wrap {
+            max-width: 900px;
+            margin: 0 auto;
+            position: relative;
+            z-index: 2;
+        }
+
+        /* ════════════════════════════════
+           HEADER
+        ════════════════════════════════ */
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .header-meta {
+            font-family: 'Oswald', sans-serif;
+            font-size: 0.58rem;
+            letter-spacing: 6px;
+            text-transform: uppercase;
+            color: var(--text-dim);
+            margin-bottom: 10px;
+        }
+
+        .header-title-link {
+            text-decoration: none;
+            display: inline-block;
+            transition: opacity 0.2s;
+        }
+        .header-title-link:hover { opacity: 0.8; }
+
+        .header-title {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: clamp(4rem, 9vw, 7.5rem);
+            letter-spacing: 3px;
+            line-height: 0.88;
+            margin-bottom: 12px;
+        }
+
+        .hl-upload {
+            color: var(--cyan);
+            text-shadow: 0 0 30px var(--cyan-glow), 0 0 80px rgba(0,200,170,0.1);
+        }
+
+        .hl-labs {
+            color: var(--orange);
+            text-shadow: 0 0 24px var(--orange-glow), 0 0 80px rgba(255,146,0,0.12);
+        }
+
+        .header-subtitle {
+            font-family: 'Oswald', sans-serif;
+            font-weight: 300;
+            font-size: 0.88rem;
+            letter-spacing: 9px;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            margin-bottom: 20px;
+        }
+
+        /* save path tip */
+        .savepath-tip {
+            display: inline-block;
+            padding: 4px 0;
+            text-align: left;
+            max-width: 640px;
+            width: 100%;
+        }
+
+        .savepath-tip-label {
+            font-family: 'Oswald', sans-serif;
+            font-size: 0.58rem;
+            letter-spacing: 4px;
+            text-transform: uppercase;
+            color: var(--cyan);
+            margin-bottom: 10px;
+        }
+
+        .savepath-row {
+            display: flex;
+            align-items: baseline;
+            gap: 14px;
+            margin-bottom: 5px;
+        }
+        .savepath-row:last-child { margin-bottom: 0; }
+
+        .sp-os {
+            font-family: 'Oswald', sans-serif;
+            font-size: 0.6rem;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            min-width: 58px;
+            flex-shrink: 0;
+        }
+
+        .savepath-tip code {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 0.7rem;
+            color: var(--text-dim);
+            word-break: break-all;
+            line-height: 1.5;
+        }
+
+        /* ════════════════════════════════
+           DIVIDERS
+        ════════════════════════════════ */
+        .divider {
+            border: none;
+            border-top: 1px solid var(--border);
+            margin: 32px 0;
+            position: relative;
+        }
+        .divider::before {
+            content: attr(data-label);
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            background: var(--bg);
+            padding: 0 14px;
+            font-size: 0.6rem;
+            letter-spacing: 4px;
+            text-transform: uppercase;
+            color: var(--text-dim);
+            font-family: 'Oswald', sans-serif;
+        }
+
+        /* ════════════════════════════════
+           PANELS
+        ════════════════════════════════ */
+        .panel {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 28px 32px;
+            margin-bottom: 20px;
+            position: relative;
+        }
+
+        .panel::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; height: 2px;
+            background: linear-gradient(90deg, transparent, var(--orange), transparent);
+            opacity: 0.45;
+        }
+
+        .panel-label {
+            font-family: 'Oswald', sans-serif;
+            font-size: 0.62rem;
+            letter-spacing: 5px;
+            text-transform: uppercase;
+            color: var(--orange);
+            margin-bottom: 18px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .panel-label::after {
+            content: ''; flex: 1; height: 1px;
+            background: var(--border);
+        }
+
+        .corner-deco {
+            position: absolute;
+            top: 12px; right: 14px;
+            font-size: 0.52rem;
+            letter-spacing: 3px;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            font-family: 'Oswald', sans-serif;
+        }
+
+        /* ════════════════════════════════
+           FILE UPLOAD
+        ════════════════════════════════ */
+        .upload-zone {
+            display: flex;
+            gap: 14px;
+            align-items: stretch;
+            flex-wrap: wrap;
+        }
+
+        .file-label {
+            flex: 1; min-width: 240px;
+            position: relative; cursor: pointer;
+        }
+
+        .file-label input[type="file"] {
+            position: absolute; inset: 0;
+            opacity: 0; cursor: pointer; width: 100%;
+        }
+
+        .file-display {
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            border-radius: 3px;
+            padding: 14px 18px;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 0.82rem;
+            color: var(--text-muted);
+            display: flex; align-items: center; gap: 10px;
+            transition: border-color 0.2s, box-shadow 0.2s;
+            height: 100%;
+            white-space: nowrap; overflow: hidden;
+        }
+        .file-label:hover .file-display {
+            border-color: var(--orange);
+            box-shadow: 0 0 12px var(--orange-dim);
+        }
+        .file-display .file-icon { color: var(--orange); font-size: 1rem; flex-shrink: 0; }
+        #file-name { overflow: hidden; text-overflow: ellipsis; }
+
+        /* ════════════════════════════════
+           BUTTONS
+        ════════════════════════════════ */
+        .btn {
+            font-family: 'Oswald', sans-serif;
+            font-weight: 600;
+            font-size: 0.9rem;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            padding: 14px 28px;
+            border: none; border-radius: 3px;
+            cursor: pointer;
+            transition: all 0.18s;
+            white-space: nowrap;
+        }
+
+        .btn-primary {
+            background: var(--orange);
+            color: #0b0908;
+        }
+        .btn-primary:hover {
+            background: var(--orange-hot);
+            box-shadow: 0 0 24px var(--orange-glow);
+            transform: translateY(-1px);
+        }
+
+        .btn-danger {
+            background: transparent;
+            color: var(--text-dim);
+            border: 1px solid var(--border);
+            font-size: 0.78rem;
+            padding: 10px 20px;
+        }
+        .btn-danger:hover {
+            border-color: var(--red-dim);
+            color: #c05040;
+        }
+
+        .btn-save {
+            background: var(--orange);
+            color: #0b0908;
+            width: 100%; padding: 16px;
+            font-size: 1rem; letter-spacing: 4px;
+            box-shadow: 0 0 20px var(--orange-dim);
+        }
+        .btn-save:hover {
+            background: var(--orange-hot);
+            box-shadow: 0 0 40px var(--orange-glow);
+            transform: translateY(-2px);
+        }
+
+        /* ════════════════════════════════
+           QUICK SET
+        ════════════════════════════════ */
+        .quickset-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+        }
+
+        .btn-quick {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 0.72rem;
+            letter-spacing: 1px;
+            padding: 12px 16px;
+            background: var(--surface-2);
+            color: var(--text-muted);
+            border: 1px solid var(--border);
+            border-radius: 3px;
+            cursor: pointer;
+            transition: all 0.18s;
+            text-align: left;
+        }
+        .btn-quick:hover {
+            border-color: var(--orange);
+            color: var(--orange);
+            box-shadow: 0 0 12px var(--orange-dim);
+            background: var(--orange-dim);
+        }
+        .btn-quick .qs-label {
+            font-family: 'Oswald', sans-serif;
+            font-size: 0.62rem;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: var(--text-dim);
+            display: block; margin-bottom: 2px;
+        }
+        .btn-quick:hover .qs-label { color: var(--text-muted); }
+
+        /* ════════════════════════════════
+           FIELDS
+        ════════════════════════════════ */
+        #fields { display: flex; flex-direction: column; gap: 8px; }
+
+        .field {
+            display: grid;
+            grid-template-columns: 1fr 1.8fr;
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            border-radius: 3px;
+            overflow: hidden;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .field:hover { border-color: #2e3240; }
+        .field.highlight { border-color: rgba(255, 146, 0, 0.25); }
+        .field.highlight:hover {
+            border-color: var(--orange);
+            box-shadow: 0 0 16px var(--orange-dim);
+        }
+
+        .field-key-wrap {
+            padding: 14px 18px;
+            border-right: 1px solid var(--border);
+            display: flex; flex-direction: column;
+            justify-content: center; gap: 4px;
+        }
+        .field.highlight .field-key-wrap { border-right-color: rgba(255,146,0,0.15); }
+
+        .key {
+            font-family: 'Oswald', sans-serif;
+            font-size: 0.85rem; font-weight: 600;
+            letter-spacing: 2px; text-transform: uppercase;
+            color: var(--orange);
+        }
+        .field:not(.highlight) .key { color: var(--text-muted); font-size: 0.78rem; }
+
+        .context {
+            font-size: 0.58rem; color: var(--text-dim);
+            line-height: 1.4; white-space: nowrap;
+            overflow: hidden; text-overflow: ellipsis;
+            max-width: 300px;
+        }
+
+        .value {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 0.88rem;
+            background: transparent;
+            color: var(--text-bright);
+            border: none; padding: 14px 18px;
+            width: 100%; outline: none;
+            transition: background 0.2s, color 0.2s;
+        }
+        .value:focus {
+            background: rgba(255, 146, 0, 0.06);
+            color: var(--orange-hot);
+            box-shadow: inset 0 0 0 1px rgba(255, 146, 0, 0.25);
+        }
+
+        /* no spinners */
+        input[type=number]::-webkit-inner-spin-button,
+        input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+        input[type=number] { -moz-appearance: textfield; }
+
+        #editor { display: none; }
+
+        .action-row {
+            display: flex; gap: 12px; align-items: center;
+            margin-top: 8px;
+        }
+
+        .note {
+            font-size: 0.68rem; color: var(--text-dim);
+            line-height: 1.8; padding: 14px 18px;
+            background: var(--surface-2);
+            border-left: 2px solid var(--orange);
+            border-radius: 0 3px 3px 0;
+            margin-top: 20px;
+        }
+        .note strong { color: var(--text-muted); }
+
+        .empty-state {
+            text-align: center; padding: 40px;
+            color: var(--text-dim); font-size: 0.78rem;
+            letter-spacing: 2px;
+        }
+        .empty-state .err {
+            color: #c05040; font-size: 0.82rem;
+            margin-top: 8px; display: block;
+        }
+
+        /* ════════════════════════════════
+           TOAST
+        ════════════════════════════════ */
+        #toast {
+            position: fixed;
+            bottom: 32px; left: 50%;
+            transform: translateX(-50%) translateY(80px);
+            background: var(--surface-3);
+            border: 1px solid var(--orange);
+            border-radius: 3px;
+            padding: 14px 28px;
+            font-family: 'Oswald', sans-serif;
+            font-size: 0.8rem;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: var(--orange);
+            box-shadow: 0 0 24px var(--orange-glow);
+            transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            z-index: 9999;
+            pointer-events: none;
+        }
+        #toast.show { transform: translateX(-50%) translateY(0); }
+
+        /* ════════════════════════════════
+           FOOTER
+        ════════════════════════════════ */
+        .footer {
+            text-align: center;
+            margin-top: 48px;
+        }
+
+        .footer-backup {
+            font-size: 0.7rem;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: var(--text-dim);
+        }
+
+        /* about section */
+        .about-section {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+            max-width: 440px;
+            margin: 4px auto 0;
+            padding-bottom: 16px;
+        }
+
+        .about-this-label {
+            font-family: 'Oswald', sans-serif;
+            font-size: 0.62rem;
+            letter-spacing: 5px;
+            text-transform: uppercase;
+            color: var(--text-dim);
+            margin-bottom: 4px;
+        }
+
+        .about-avatar {
+            width: 64px; height: 64px;
+            border-radius: 50%;
+            border: 2px solid var(--purple);
+            box-shadow: 0 0 20px var(--purple-dim);
+            display: block;
+        }
+
+        .about-credit {
+            font-family: 'Oswald', sans-serif;
+            font-size: 0.72rem;
+            letter-spacing: 2px;
+            color: var(--text-muted);
+        }
+        .about-credit a {
+            color: var(--purple);
+            text-decoration: none;
+            transition: text-shadow 0.2s;
+        }
+        .about-credit a:hover { text-shadow: 0 0 12px var(--purple); }
+
+        .about-support-text {
+            font-size: 0.72rem;
+            color: var(--text-dim);
+            text-align: center;
+            line-height: 1.7;
+            max-width: 360px;
+        }
+
+        .about-links {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .about-links li::before {
+            content: '— ';
+            color: var(--text-dim);
+        }
+
+        .about-links a,
+        .btn-link-inline {
+            color: var(--cyan);
+            text-decoration: none;
+            font-size: 0.75rem;
+            background: none; border: none;
+            cursor: pointer;
+            font-family: 'Share Tech Mono', monospace;
+            padding: 0;
+            transition: all 0.2s;
+            letter-spacing: 0.5px;
+        }
+        .about-links a:hover,
+        .btn-link-inline:hover {
+            color: var(--text-bright);
+            text-shadow: 0 0 8px var(--cyan-glow);
+        }
+
+        .about-bug {
+            font-size: 0.68rem;
+            color: var(--text-dim);
+            letter-spacing: 0.5px;
+        }
+        .about-bug a {
+            color: var(--text-muted);
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+        .about-bug a:hover { color: var(--orange); }
+
+        /* ════════════════════════════════
+           CRYPTO MODAL
+        ════════════════════════════════ */
+        .modal-overlay {
+            position: fixed; inset: 0;
+            background: rgba(5, 5, 8, 0.75);
+            backdrop-filter: blur(6px);
+            z-index: 500;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .modal-overlay.open { display: flex; }
+
+        .modal {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            width: 620px;
+            max-width: 100%;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 24px 80px rgba(0,0,0,0.6), 0 0 40px rgba(0,0,0,0.4);
+        }
+
+        .modal::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; height: 2px;
+            background: linear-gradient(90deg, transparent, var(--orange), transparent);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 24px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .modal-header h3 {
+            font-family: 'Oswald', sans-serif;
+            font-size: 0.82rem;
+            font-weight: 600;
+            letter-spacing: 5px;
+            text-transform: uppercase;
+            color: var(--orange);
+        }
+
+        .btn-close-panel {
+            background: none; border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 1rem;
+            padding: 4px 8px;
+            transition: color 0.2s;
+            font-family: inherit;
+            border-radius: 3px;
+        }
+        .btn-close-panel:hover { color: var(--text-bright); background: rgba(255,255,255,0.04); }
+
+        .modal-body { padding: 24px; }
+
+        .crypto-body {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .crypto-entry {
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            border-radius: 3px;
+            padding: 16px 18px;
+            transition: border-color 0.2s;
+        }
+        .crypto-entry:hover { border-color: #2e3240; }
+
+        .crypto-label {
+            font-family: 'Oswald', sans-serif;
+            font-size: 0.6rem;
+            letter-spacing: 4px;
+            text-transform: uppercase;
+            color: var(--orange);
+            margin-bottom: 10px;
+        }
+
+        .crypto-row {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .crypto-address {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 0.68rem;
+            color: var(--text-muted);
+            word-break: break-all;
+            flex: 1;
+            line-height: 1.5;
+        }
+
+        .btn-copy {
+            font-family: 'Oswald', sans-serif;
+            font-size: 0.62rem;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            padding: 8px 16px;
+            background: transparent;
+            color: var(--text-muted);
+            border: 1px solid var(--border);
+            border-radius: 3px;
+            cursor: pointer;
+            flex-shrink: 0;
+            transition: all 0.18s;
+        }
+        .btn-copy:hover {
+            border-color: var(--orange);
+            color: var(--orange);
+            box-shadow: 0 0 10px var(--orange-dim);
+        }
+        .btn-copy.copied {
+            border-color: var(--green-ok);
+            color: #6abf54;
+        }
+    </style>
+</head>
+<body>
+
+<div id="toast"></div>
+
+<!-- ══ CRYPTO MODAL ══ -->
+<div id="cryptoOverlay" class="modal-overlay" onclick="closeCryptoModal(event)">
+    <div class="modal crypto-modal">
+        <div class="modal-header">
+            <h3>Crypto Donations</h3>
+            <button class="btn-close-panel" id="closeCryptoModalBtn" onclick="closeCryptoModal()">✕</button>
+        </div>
+        <div class="modal-body crypto-body">
+            <div class="crypto-entry">
+                <div class="crypto-label">Bitcoin</div>
+                <div class="crypto-row">
+                    <span class="crypto-address">bc1q4687dunw3xlxv5f09mxcm6kyflcnj9fahwpwtx</span>
+                    <button class="btn-copy" data-addr="bc1q4687dunw3xlxv5f09mxcm6kyflcnj9fahwpwtx">Copy</button>
+                </div>
+            </div>
+            <div class="crypto-entry">
+                <div class="crypto-label">Ethereum</div>
+                <div class="crypto-row">
+                    <span class="crypto-address">0x5eaF6ade0e1b7b352cC26DcD9454D2035ba6839B</span>
+                    <button class="btn-copy" data-addr="0x5eaF6ade0e1b7b352cC26DcD9454D2035ba6839B">Copy</button>
+                </div>
+            </div>
+            <div class="crypto-entry">
+                <div class="crypto-label">Monero</div>
+                <div class="crypto-row">
+                    <span class="crypto-address">86Awy9FdoGiPEEwAPfBpSWMbPNB7Y2AmeAStEVB3rKWyMrtRQS5YUNUWKwWNMDE3cLbxo6Fp7X9Mx2GUXaPcBkt88TEHzME</span>
+                    <button class="btn-copy" data-addr="86Awy9FdoGiPEEwAPfBpSWMbPNB7Y2AmeAStEVB3rKWyMrtRQS5YUNUWKwWNMDE3cLbxo6Fp7X9Mx2GUXaPcBkt88TEHzME">Copy</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="wrap">
+
+    <!-- ══ HEADER ══ -->
+    <header class="header">
+        <div class="header-meta">Save Editor &nbsp;·&nbsp; v2 &nbsp;·&nbsp; Client-Side</div>
+        <a href="https://store.steampowered.com/app/2858620/Upload_Labs/" target="_blank" class="header-title-link">
+            <h1 class="header-title">
+                <span class="hl-upload">upload</span><span class="hl-labs">LABS</span>
+            </h1>
+        </a>
+        <div class="header-subtitle">Save Editor</div>
+        <div class="savepath-tip">
+            <div class="savepath-tip-label">Save File Location</div>
+            <div class="savepath-row">
+                <span class="sp-os">Windows</span>
+                <code>C:\Users\&lt;your username&gt;\AppData\Roaming\Upload Labs\savegame.dat</code>
+            </div>
+            <div class="savepath-row">
+                <span class="sp-os">Linux</span>
+                <code>~/.local/share/Upload Labs/savegame.dat</code>
+            </div>
+        </div>
+    </header>
+
+    <!-- ══ LOAD FILE ══ -->
+    <div class="panel">
+        <div class="corner-deco">SYS // LOAD</div>
+        <div class="panel-label">01 &nbsp; Load Save File</div>
+        <div class="upload-zone">
+            <label class="file-label">
+                <input type="file" id="fileInput" accept=".dat" onchange="updateFileName(this)">
+                <div class="file-display">
+                    <span class="file-icon">&#9635;</span>
+                    <span id="file-name">select savegame.dat ...</span>
+                </div>
+            </label>
+            <button class="btn btn-primary" onclick="loadFile()">&#9654; &nbsp;Load</button>
+        </div>
+    </div>
+
+    <!-- ══ EDITOR ══ -->
+    <div id="editor">
+
+        <div class="panel">
+            <div class="corner-deco">SYS // FIELDS</div>
+            <div class="panel-label">02 &nbsp; Resource Fields</div>
+            <div id="fields"></div>
+            <div class="note">
+                <strong>highlighted fields</strong> = money / tokens / research — the ones that matter.<br>
+                remaining fields exist in save — editing via notepad is safer for those.
+            </div>
+        </div>
+
+        <div class="panel">
+            <div class="corner-deco">SYS // EXPORT</div>
+            <div class="panel-label">03 &nbsp; Export</div>
+            <button class="btn btn-save" onclick="saveEditedFile()">&#11015; &nbsp; Download Edited savegame.dat</button>
+            <div class="action-row" style="margin-top:14px;">
+                <button class="btn btn-danger" onclick="resetEditor()">&#10005; &nbsp; Clear &amp; Start Over</button>
+                <span style="font-size:0.66rem; color:var(--text-dim); letter-spacing:1px;">
+                    replace original file then restart the game
+                </span>
+            </div>
+        </div>
+
+    </div><!-- /editor -->
+
+    <!-- ══ FOOTER ══ -->
+    <footer class="footer">
+        <p class="footer-backup">&#9888; backup your save before editing</p>
+
+        <hr class="divider" data-label="about" style="margin-top:28px;">
+
+        <div class="about-section">
+            <p class="about-this-label">About This</p>
+            <img
+                src="https://avatars.githubusercontent.com/u/138826417?v=4"
+                class="about-avatar"
+                alt="Void Possum"
+                onerror="this.style.display='none'"
+            >
+            <p class="about-credit">Created by <a href="https://github.com/voidpossum" target="_blank">Void Possum</a></p>
+            <p class="about-support-text">
+                If you'd like to support me in improving my skills or buy me a coffee, please consider doing so here:
+            </p>
+            <ul class="about-links">
+                <li><a href="https://ko-fi.com/voidpossum" target="_blank">Support via Ko-fi</a></li>
+                <li><button class="btn-link-inline" onclick="openCryptoModal()">Crypto Donations</button></li>
+            </ul>
+            <p class="about-bug">Found a bug? &#8594; <a href="mailto:bugs.voidpossum@icloud.com">bugs.voidpossum@icloud.com</a></p>
+        </div>
+    </footer>
+
+</div><!-- /wrap -->
+
+<script>
+    let originalText = '';
+    let edits = [];
+
+    function updateFileName(input) {
+        const el = document.getElementById('file-name');
+        el.textContent = input.files.length ? input.files[0].name : 'select savegame.dat ...';
+    }
+
+    function loadFile() {
+        const fileInput = document.getElementById('fileInput');
+        if (!fileInput.files.length) { showToast('⚠ select a file first'); return; }
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            originalText = e.target.result;
+            parseAndRender();
+        };
+        reader.readAsText(fileInput.files[0]);
+    }
+
+    function parseAndRender() {
+        edits = [];
+        const container = document.getElementById('fields');
+        container.innerHTML = '';
+
+        const regex = /"(money|token|research|research_advanced)":\s*([0-9.eE+-]+)/g;
+        let match;
+
+        while ((match = regex.exec(originalText)) !== null) {
+            const key       = match[1];
+            const valueStr  = match[2];
+            const fullMatch = match[0];
+            const start     = Math.max(0, match.index - 50);
+            const context   = originalText.substring(start, match.index + 100).replace(/\n/g, ' ').trim();
+            const isHighlight = ['money', 'token', 'research'].includes(key);
+
+            const div = document.createElement('div');
+            div.className = 'field' + (isHighlight ? ' highlight' : '');
+            div.innerHTML = `
+                <div class="field-key-wrap">
+                    <span class="key">${key}</span>
+                    <span class="context" title="${context}">${context}</span>
+                </div>
+                <input type="number" step="any" class="value" value="${valueStr}" data-fullmatch="${fullMatch}">
+            `;
+            container.appendChild(div);
+            edits.push({ fullMatch, key, input: div.querySelector('input') });
+        }
+
+        if (edits.length === 0) {
+            container.innerHTML = `
+                <div class="empty-state">
+                    no editable fields found
+                    <span class="err">make sure you uploaded the correct savegame.dat</span>
+                </div>`;
+        }
+
+        document.getElementById('editor').style.display = 'block';
+        showToast('✔ file loaded — ' + edits.length + ' fields found');
+    }
+
+    function quickSet(key, amount) {
+        const input = Array.from(document.querySelectorAll('#fields input')).find(inp => {
+            const full = inp.getAttribute('data-fullmatch');
+            return full && full.includes(`"${key}":`);
+        });
+        if (input) {
+            input.value = amount;
+            input.dispatchEvent(new Event('input'));
+            showToast('✔ ' + key + ' → ' + Number(amount).toLocaleString());
+        } else {
+            showToast('⚠ no ' + key + ' field in this save');
+        }
+    }
+
+    function saveEditedFile() {
+        let newText = originalText;
+        edits.forEach(edit => {
+            const newVal = parseFloat(edit.input.value);
+            if (isNaN(newVal)) return;
+            newText = newText.replace(edit.fullMatch, `"${edit.key}": ${newVal}`);
+        });
+        const blob = new Blob([newText], { type: 'text/plain' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = 'savegame.dat';
+        link.click();
+        showToast('⬇ savegame.dat downloaded');
+    }
+
+    function resetEditor() {
+        document.getElementById('editor').style.display = 'none';
+        document.getElementById('fileInput').value = '';
+        document.getElementById('file-name').textContent = 'select savegame.dat ...';
+        originalText = '';
+        edits = [];
+    }
+
+    /* ── TOAST ── */
+    let toastTimeout;
+    function showToast(msg) {
+        const el = document.getElementById('toast');
+        el.textContent = msg;
+        el.classList.add('show');
+        clearTimeout(toastTimeout);
+        toastTimeout = setTimeout(() => el.classList.remove('show'), 2800);
+    }
+
+    /* ── CRYPTO MODAL ── */
+    function openCryptoModal() {
+        document.getElementById('cryptoOverlay').classList.add('open');
+    }
+
+    function closeCryptoModal(e) {
+        const overlay = document.getElementById('cryptoOverlay');
+        if (!e || e.target === overlay) {
+            overlay.classList.remove('open');
+        }
+    }
+
+    document.addEventListener('keydown', e => {
+        if (e.key === 'Escape') document.getElementById('cryptoOverlay').classList.remove('open');
+    });
+
+    /* ── COPY BUTTONS ── */
+    document.querySelectorAll('.btn-copy').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const addr = btn.getAttribute('data-addr');
+            navigator.clipboard.writeText(addr).then(() => {
+                showToast('✔ address copied');
+                const orig = btn.textContent;
+                btn.textContent = 'Copied!';
+                btn.classList.add('copied');
+                setTimeout(() => {
+                    btn.textContent = orig;
+                    btn.classList.remove('copied');
+                }, 2500);
+            }).catch(() => {
+                showToast('⚠ copy failed — select manually');
+            });
+        });
+    });
+</script>
+</body>
+</html>
